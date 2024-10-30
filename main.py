@@ -44,6 +44,7 @@ def scroll_tiktok(driver, num_videos=10):
     body = driver.find_element(By.TAG_NAME, 'body')
     un_sponsored_articles = []
     filename = create_file_name()
+    filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
 
     for i in range(num_videos):
         un_sponsored_article = remove_non_sponsor(driver, filename)
@@ -55,7 +56,7 @@ def scroll_tiktok(driver, num_videos=10):
         # Wait to let video load and play a bit
         time.sleep(5)
 
-        if i % 10 == 0 or (num_videos < 10 and i == num_videos - 1):
+        if (i + 1) % 5 == 0 and i > 0:
             for un_sponsored_article in un_sponsored_articles:
                 driver.execute_script("arguments[0].remove();", un_sponsored_article)
             un_sponsored_articles = []
@@ -68,7 +69,7 @@ def remove_non_sponsor(driver, filename):
         video = driver.find_element(By.TAG_NAME, 'video')
         article = video.find_element(By.XPATH, './ancestor::article[1]')
         if any(sponsored_text.lower() in article.text.lower() for sponsored_text in sponsored_texts):
-            f = open(filename, "a")
+            f = open(filename, "a", encoding="utf-8", errors="ignore")
             video_url = video.get_attribute("src")
             if not video_url:
                 source = video.find_element(By.TAG_NAME, "source")
@@ -84,7 +85,7 @@ def remove_non_sponsor(driver, filename):
             f.close()
             return None
         return article
-    except:
+    except Exception as e:
         return None
 
 
@@ -98,8 +99,8 @@ def create_file_name():
 
 max_videos = int(input("Max videos: "))
 driver_path = input("Chrome driver path: ")
-driver_path = driver_path if driver_path else '/chromedriver'
-driver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chromedriver")
+driver_path = driver_path if driver_path else 'chromedriver.exe'
+driver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), driver_path)
 print("driver path: " + driver_path)
 sponsored_texts_input = input("Sponsored Text(Separate by comma; example ): Được tài trợ,Capcut ")
 if sponsored_texts_input:
