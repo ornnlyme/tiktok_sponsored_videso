@@ -117,6 +117,8 @@ if start.lower() == 'y':
     max_videos = max_videos if max_videos else 10
     scroll_tiktok(driver, max_videos)
 
+stop = input("Stop: type Y/y: ")
+if stop.lower() == 'y':
     # Close the browser
     driver.quit()
 
