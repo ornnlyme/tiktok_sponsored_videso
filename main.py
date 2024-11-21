@@ -32,7 +32,7 @@ def init_selenium(driver_path, run_with_debug):
     driver.get("https://www.tiktok.com")
 
     # Give time for the page to load
-    time.sleep(5)
+    time.sleep(1)
 
     # Create ActionChains instance for scrolling
     actions = ActionChains(driver)
@@ -40,54 +40,73 @@ def init_selenium(driver_path, run_with_debug):
 
 
 def scroll_tiktok(driver, num_videos=10):
+    start = time.time()
     # Locate the body tag for scrolling
     body = driver.find_element(By.TAG_NAME, 'body')
-    un_sponsored_articles = []
     filename = create_file_name()
     filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+    current_index = 0
 
-    for i in range(num_videos):
-        un_sponsored_article = remove_non_sponsor(driver, filename)
-        if un_sponsored_article:
-            un_sponsored_articles.append(un_sponsored_article)
+    while(True):
+        articles = driver.find_elements(By.TAG_NAME, 'article')
+        if current_index != len(articles):
+            current_index = len(articles)
+            time.sleep(1)
+            articles[-1].click()
         # Scroll down (this simulates pressing the "Page Down" key)
+        time.sleep(1)
+        body.send_keys(Keys.ARROW_UP)
+        body.send_keys(Keys.ARROW_DOWN)
         body.send_keys(Keys.ARROW_DOWN)
 
         # Wait to let video load and play a bit
-        time.sleep(5)
-
-        if (i + 1) % 5 == 0 and i > 0:
-            for un_sponsored_article in un_sponsored_articles:
-                driver.execute_script("arguments[0].remove();", un_sponsored_article)
-            un_sponsored_articles = []
+        print(f"No of articles: {len(articles)}.")
+        if len(articles) >= num_videos:
+            break
 
     print("Scrolling complete.")
+    print("Start removing non sponsor videos.")
+
+    for article in articles:
+        un_sponsored_article = remove_non_sponsor(article, filename)
+        if un_sponsored_article:
+            driver.execute_script("arguments[0].remove();", un_sponsored_article)
+
+    print("Removing non sponsor videos complete.")
+    print(time.time() - start)
+
+    print("Write sponsor video url to file.")
+    articles = driver.find_elements(By.TAG_NAME, 'article')
+    copy_video_url(driver, articles, filename)
+    print(time.time() - start)
 
 
-def remove_non_sponsor(driver, filename):
+def remove_non_sponsor(article, filename):
     try:
-        video = driver.find_element(By.TAG_NAME, 'video')
-        article = video.find_element(By.XPATH, './ancestor::article[1]')
-        if any(sponsored_text.lower() in article.text.lower() for sponsored_text in sponsored_texts):
-            f = open(filename, "a", encoding="utf-8", errors="ignore")
-            video_url = video.get_attribute("src")
-            if not video_url:
-                source = video.find_element(By.TAG_NAME, "source")
-                video_url = source.get_attribute("src")
-            f.write("------------------------------\n")
-            f.write("Content: \n")
-            f.write(article.text)
-            f.write("\n")
-            f.write("Video url: ")
-            f.write(video_url)
-            f.write("\n")
-            f.write("------------------------------\n")
-            f.close()
+        html = article.get_attribute("outerHTML")
+        if any(sponsored_text.lower() in html.lower() for sponsored_text in sponsored_texts):
             return None
         return article
     except Exception as e:
         return None
 
+def copy_video_url(driver, articles, filename):
+    if len(articles) == 0:
+        return
+    article = articles[0]
+    article.click()
+    comment = driver.find_element("xpath","//span[@data-e2e='comment-icon']")
+    comment.click()
+    f = open(filename, "a", encoding="utf-8", errors="ignore")
+    for i in range(len(articles)):
+        video_url = driver.current_url
+        f.write("------------------------------\n")
+        f.write(video_url)
+        f.write("\n")
+        down_button = driver.find_element("xpath","//button[@data-e2e='arrow-right']")
+        down_button.click()
+
+    f.close()
 
 def create_file_name():
     # Get current date and time
@@ -99,7 +118,7 @@ def create_file_name():
 
 max_videos = int(input("Max videos: "))
 driver_path = input("Chrome driver path: ")
-driver_path = driver_path if driver_path else 'chromedriver.exe'
+driver_path = driver_path if driver_path else 'chromedriver'
 driver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), driver_path)
 print("driver path: " + driver_path)
 sponsored_texts_input = input("Sponsored Text(Separate by comma; example ): Được tài trợ,Capcut ")
