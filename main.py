@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime
 
 from selenium import webdriver
@@ -40,73 +41,82 @@ def init_selenium(driver_path, run_with_debug):
 
 
 def scroll_tiktok(driver, num_videos=10):
-    start = time.time()
-    # Locate the body tag for scrolling
-    body = driver.find_element(By.TAG_NAME, 'body')
-    filename = create_file_name()
-    filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
-    current_index = 0
+    try:
+        # Locate the body tag for scrolling
+        body = driver.find_element(By.TAG_NAME, 'body')
+        current_index = 0
 
-    while(True):
-        articles = driver.find_elements(By.TAG_NAME, 'article')
-        if current_index != len(articles):
-            current_index = len(articles)
+        while (True):
+            articles = driver.find_elements(By.TAG_NAME, 'article')
+            if current_index != len(articles):
+                current_index = len(articles)
+                time.sleep(1)
+                articles[-1].click()
+            # Scroll down (this simulates pressing the "Page Down" key)
             time.sleep(1)
-            articles[-1].click()
-        # Scroll down (this simulates pressing the "Page Down" key)
-        time.sleep(1)
-        body.send_keys(Keys.ARROW_UP)
-        body.send_keys(Keys.ARROW_DOWN)
-        body.send_keys(Keys.ARROW_DOWN)
+            body.send_keys(Keys.ARROW_UP)
+            body.send_keys(Keys.ARROW_DOWN)
+            body.send_keys(Keys.ARROW_DOWN)
 
-        # Wait to let video load and play a bit
-        print(f"No of articles: {len(articles)}.")
-        if len(articles) >= num_videos:
-            break
+            # Wait to let video load and play a bit
+            print(f"No of articles: {len(articles)}.")
+            if len(articles) >= num_videos:
+                break
 
-    print("Scrolling complete.")
-    print("Start removing non sponsor videos.")
+        print("Scrolling complete.")
+        print("Start removing non sponsor videos.")
 
-    for article in articles:
-        un_sponsored_article = remove_non_sponsor(article, filename)
-        if un_sponsored_article:
-            driver.execute_script("arguments[0].remove();", un_sponsored_article)
+        for article in articles:
+            un_sponsored_article = remove_non_sponsor(article)
+            if un_sponsored_article:
+                driver.execute_script("arguments[0].remove();", un_sponsored_article)
 
-    print("Removing non sponsor videos complete.")
-    print(time.time() - start)
+        print("Removing non sponsor videos complete.")
 
-    print("Write sponsor video url to file.")
-    articles = driver.find_elements(By.TAG_NAME, 'article')
-    copy_video_url(driver, articles, filename)
-    print(time.time() - start)
+        copy_video_url(driver)
+    except Exception as e:
+        print(f"Scroll tiktok failed: {e}")
 
 
-def remove_non_sponsor(article, filename):
+def remove_non_sponsor(article):
     try:
         html = article.get_attribute("outerHTML")
         if any(sponsored_text.lower() in html.lower() for sponsored_text in sponsored_texts):
             return None
         return article
     except Exception as e:
+        print(f"Remove non sponsor video failed: {e}")
         return None
 
-def copy_video_url(driver, articles, filename):
-    if len(articles) == 0:
-        return
-    article = articles[0]
-    article.click()
-    comment = driver.find_element("xpath","//span[@data-e2e='comment-icon']")
-    comment.click()
-    f = open(filename, "a", encoding="utf-8", errors="ignore")
-    for i in range(len(articles)):
-        video_url = driver.current_url
-        f.write("------------------------------\n")
-        f.write(video_url)
-        f.write("\n")
-        down_button = driver.find_element("xpath","//button[@data-e2e='arrow-right']")
-        down_button.click()
 
-    f.close()
+def copy_video_url(driver):
+    try:
+        print("Write sponsor video url to file.")
+        articles = driver.find_elements(By.TAG_NAME, 'article')
+        if len(articles) == 0:
+            return
+        article = articles[0]
+        article.click()
+        comment = driver.find_element("xpath", "//span[@data-e2e='comment-icon']")
+        comment.click()
+        filename = create_file_name()
+        exe_dir = get_executable_dir()
+        filepath = os.path.join(exe_dir, filename)
+        f = open(filepath, "a", encoding="utf-8", errors="ignore")
+        for i in range(len(articles)):
+            video_url = driver.current_url
+            f.write("------------------------------\n")
+            f.write(video_url)
+            f.write("\n")
+            down_button = driver.find_element("xpath", "//button[@data-e2e='arrow-right']")
+            down_button.click()
+
+        f.close()
+        print("Write sponsor video url to file complete \n")
+        print(f"File: {filepath}")
+    except Exception as e:
+        print(f"Copy video url failed: {e}")
+
 
 def create_file_name():
     # Get current date and time
@@ -116,30 +126,46 @@ def create_file_name():
     return now.strftime("file_%Y-%m-%d_%H-%M-%S.txt")
 
 
-max_videos = int(input("Max videos: "))
-driver_path = input("Chrome driver path: ")
-driver_path = driver_path if driver_path else 'chromedriver'
-driver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), driver_path)
-print("driver path: " + driver_path)
-sponsored_texts_input = input("Sponsored Text(Separate by comma; example ): Được tài trợ,Capcut ")
-if sponsored_texts_input:
-    sponsored_texts = sponsored_texts_input.split(",")
-# init driver
-run_with_debug = input("Run with debug: ")
-run_with_debug = True if run_with_debug.lower() == 'y' else False
+def get_driver_path():
+    if getattr(sys, 'frozen', False):  # If bundled by PyInstaller
+        # Locate the driver in the bundled files
+        return os.path.join(sys._MEIPASS, "chromedriver.exe")
+    else:
+        # For regular execution
+        return "chromedriver.exe"
 
-driver = init_selenium(driver_path, run_with_debug)
+def get_executable_dir():
+    if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller executable
+        return os.path.dirname(sys.executable)  # Path to the .exe file
+    else:
+        return os.path.dirname(os.path.abspath(__file__))
+
+
+driver_path = get_driver_path()
+print("driver path: " + driver_path)
+# init driver
+# run_with_debug = input("Run with debug: ")
+# run_with_debug = True if run_with_debug.lower() == 'y' else False
+
+driver = init_selenium(driver_path, False)
 
 start = input("Start: type Y/y: ")
 if start.lower() == 'y':
     # Run the scroll function
-    max_videos = max_videos if max_videos else 10
-    scroll_tiktok(driver, max_videos)
+    while True:
+        sponsored_texts_input = input("Sponsored Text(Separate by comma; example ): Được tài trợ,Capcut ")
+        if sponsored_texts_input:
+            sponsored_texts = sponsored_texts_input.split(",")
+        max_videos = int(input("Max videos: "))
+        max_videos = max_videos if max_videos else 10
+        scroll_tiktok(driver, max_videos)
 
-stop = input("Stop: type Y/y: ")
-if stop.lower() == 'y':
-    # Close the browser
-    driver.quit()
+        stop = input("Stop: type Y/y: ")
+        if stop.lower() == 'y':
+            # Close the browser
+            driver.quit()
+            break
 
 # /usr/bin/google-chrome-stable --remote-debugging-port=9222 --no-first-run --no-default-browser-check --user-data-dir=remote-profile
+# pyinstaller --onefile --add-data "chromedriver.exe;." main.py
 # 130.0.6723.91
